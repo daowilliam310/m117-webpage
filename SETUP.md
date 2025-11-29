@@ -34,24 +34,32 @@ The database is pre-populated with 3 users:
 
 Each user has 2 accounts (Checking & Savings) with realistic transaction history.
 
-## 🔑 OpenAI API Key (Optional)
+## 🔑 Ollama Setup (Required for AI Chat)
 
 To enable the AI chat widget:
 
-1. Create/edit the `.env` file:
+1. Install Ollama from https://ollama.ai
+
+2. Pull and run the Mistral model:
+   ```bash
+   ollama run mistral
+   ```
+
+3. (Optional) Create/edit the `.env` file to customize settings:
    ```bash
    nano .env
    ```
 
-2. Add your OpenAI API key:
+4. Add configuration if needed:
    ```
-   OPENAI_API_KEY=sk-your-api-key-here
+   OLLAMA_API_URL=http://localhost:11434
+   OLLAMA_MODEL=mistral
    PORT=3000
    ```
 
-3. Restart the server
+5. Keep Ollama running in a separate terminal, then restart the server
 
-**Note:** The website works without an API key, but the chat widget will show an error message when you try to use it.
+**Note:** The website works without Ollama, but the chat widget will show an error message when you try to use it.
 
 ## 🎯 Features
 

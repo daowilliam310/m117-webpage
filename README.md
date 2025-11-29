@@ -6,7 +6,7 @@ A full-stack banking website with an AI-powered group chat widget, intentionally
 
 - **Multi-User Banking Dashboard**: Three pre-configured user accounts with checking and savings accounts
 - **Dynamic Account Information**: Real-time display of account balances, transactions, and sensitive data
-- **Group Chat with AI**: Multi-user chat interface with GPT-4 integration that can access page context
+- **Group Chat with AI**: Multi-user chat interface with Mistral (via Ollama) integration that can access page context
 - **Intentionally Vulnerable**: Designed to demonstrate prompt injection, XSS, and data exfiltration vulnerabilities
 - **Database-Driven**: SQLite database with pre-populated accounts and transaction history
 
@@ -27,10 +27,18 @@ npm install
 
 ## Configuration
 
-Create a `.env` file in the root directory:
+1. Install Ollama from https://ollama.ai
+2. Pull and run the Mistral model:
+
+```bash
+ollama run mistral
+```
+
+3. Create a `.env` file in the root directory (optional, uses defaults):
 
 ```
-OPENAI_API_KEY=your_openai_api_key_here
+OLLAMA_API_URL=http://localhost:11434
+OLLAMA_MODEL=mistral
 PORT=3000
 ```
 
@@ -91,7 +99,7 @@ The chatbot has **NO BUILT-IN DEFENSES** to allow testing of various attack vect
 
 - **Backend**: Node.js, Express, SQLite3
 - **Frontend**: HTML5, Bootstrap 5, Vanilla JavaScript
-- **AI**: OpenAI GPT-4 API
+- **AI**: Mistral via Ollama API
 - **Database**: SQLite
 
 ## Team

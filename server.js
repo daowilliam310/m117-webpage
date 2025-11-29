@@ -6,7 +6,7 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
 require('dotenv').config();
-const OpenAI = require('openai');
+const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
@@ -17,9 +17,8 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('public'));
 
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-}) : null;
+const OLLAMA_API_URL = process.env.OLLAMA_API_URL || 'http://localhost:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'mistral';
 
 let db;
 const dbPath = './database.sqlite';
@@ -422,27 +421,20 @@ app.post('/api/chat/send', authenticateSession, async (req, res) => {
     }
 
     try {
-      if (!openai) {
-        throw new Error('OpenAI API key not configured');
-      }
+      const systemPrompt = `You are a helpful banking assistant. You have access to the user's page content and can help them with their banking needs.${contextString}`;
+      const fullPrompt = `${systemPrompt}\n\nUser: ${message}\n\nAssistant:`;
       
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are a helpful banking assistant. You have access to the user's page content and can help them with their banking needs.${contextString}`
-          },
-          {
-            role: "user",
-            content: message
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
+      const response = await axios.post(`${OLLAMA_API_URL}/api/generate`, {
+        model: OLLAMA_MODEL,
+        prompt: fullPrompt,
+        stream: false,
+        options: {
+          temperature: 0.7,
+          num_predict: 500
+        }
       });
 
-      const aiResponse = completion.choices[0].message.content;
+      const aiResponse = response.data.response;
 
       db.run('INSERT INTO chat_messages (username, message, is_ai) VALUES (?, ?, ?)',
         ['AI Assistant', aiResponse, 1]);
@@ -467,9 +459,9 @@ app.post('/api/chat/send', authenticateSession, async (req, res) => {
         }
       });
     } catch (apiError) {
-      console.error('OpenAI API error:', apiError);
+      console.error('Ollama API error:', apiError);
 
-      const errorMsg = 'Sorry, I encountered an error processing your request. Make sure your OpenAI API key is configured in the .env file.';
+      const errorMsg = 'Sorry, I encountered an error processing your request. Make sure Ollama is running with the Mistral model (run: ollama run mistral)';
       db.run('INSERT INTO chat_messages (username, message, is_ai) VALUES (?, ?, ?)',
         ['AI Assistant', errorMsg, 1]);
       
