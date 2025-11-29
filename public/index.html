@@ -33,12 +33,74 @@
       color: white !important;
     }
 
-    .user-selector {
+    .auth-container {
+      max-width: 450px;
+      margin: 80px auto;
       background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding: 40px;
+      border-radius: 15px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+
+    .auth-container h2 {
+      color: var(--primary-color);
       margin-bottom: 30px;
+      text-align: center;
+    }
+
+    .form-control {
+      padding: 12px;
+      border-radius: 8px;
+      border: 2px solid #e5e7eb;
+      margin-bottom: 15px;
+    }
+
+    .form-control:focus {
+      border-color: var(--secondary-color);
+      box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      border: none;
+      padding: 12px;
+      font-weight: bold;
+      border-radius: 8px;
+      width: 100%;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #1e40af, #2563eb);
+      transform: translateY(-2px);
+    }
+
+    .btn-logout {
+      background: var(--danger-color);
+      color: white;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+
+    .btn-logout:hover {
+      background: #dc2626;
+    }
+
+    .auth-switch {
+      text-align: center;
+      margin-top: 20px;
+      color: #6b7280;
+    }
+
+    .auth-switch a {
+      color: var(--secondary-color);
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .auth-switch a:hover {
+      text-decoration: underline;
     }
 
     .dashboard-container {
@@ -148,9 +210,13 @@
       background: white;
       border-radius: 15px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-      display: flex;
+      display: none;
       flex-direction: column;
       z-index: 1000;
+    }
+
+    #chat-widget.active {
+      display: flex;
     }
 
     #chat-header {
@@ -258,33 +324,9 @@
       transform: none;
     }
 
-    .session-token-display {
-      background: #fee2e2;
-      border: 2px solid #dc2626;
+    .alert {
       border-radius: 8px;
-      padding: 10px;
-      margin-top: 10px;
-      font-size: 0.85rem;
-    }
-
-    .api-key-display {
-      background: #dbeafe;
-      border: 2px solid #2563eb;
-      border-radius: 8px;
-      padding: 10px;
-      margin-top: 10px;
-      font-family: 'Courier New', monospace;
-      font-size: 0.8rem;
-      word-break: break-all;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-      border: none;
-    }
-
-    .btn-primary:hover {
-      background: linear-gradient(135deg, #1e40af, #2563eb);
+      margin-bottom: 20px;
     }
   </style>
 </head>
@@ -294,19 +336,51 @@
       <span class="navbar-brand">
         <i class="fas fa-university"></i> SecureBank
       </span>
-      <span class="text-white" id="current-user-display"></span>
+      <div id="user-info" style="display: none;">
+        <span class="text-white me-3" id="current-user-display"></span>
+        <button class="btn-logout" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+      </div>
     </div>
   </nav>
 
-  <div class="container mt-4">
-    <div class="user-selector" id="user-selector">
-      <h3><i class="fas fa-user-circle"></i> Select Your Account</h3>
-      <p class="text-muted">Choose a user to view their banking dashboard</p>
-      <div id="user-list" class="mt-3"></div>
+  <div class="container">
+    <div class="auth-container" id="login-container">
+      <h2><i class="fas fa-lock"></i> Login to SecureBank</h2>
+      <div id="login-error" class="alert alert-danger" style="display: none;"></div>
+      <form id="login-form">
+        <input type="text" class="form-control" id="login-username" placeholder="Username" required>
+        <input type="password" class="form-control" id="login-password" placeholder="Password" required>
+        <button type="submit" class="btn btn-primary mt-3">
+          <i class="fas fa-sign-in-alt"></i> Login
+        </button>
+      </form>
+      <div class="auth-switch">
+        Don't have an account? <a href="#" onclick="showRegister(); return false;">Register here</a>
+      </div>
+    </div>
+
+    <div class="auth-container" id="register-container" style="display: none;">
+      <h2><i class="fas fa-user-plus"></i> Create Account</h2>
+      <div id="register-error" class="alert alert-danger" style="display: none;"></div>
+      <div id="register-success" class="alert alert-success" style="display: none;"></div>
+      <form id="register-form">
+        <input type="text" class="form-control" id="register-fullname" placeholder="Full Name" required>
+        <input type="email" class="form-control" id="register-email" placeholder="Email" required>
+        <input type="text" class="form-control" id="register-username" placeholder="Username" required>
+        <input type="password" class="form-control" id="register-password" placeholder="Password (min 6 characters)" required minlength="6">
+        <button type="submit" class="btn btn-primary mt-3">
+          <i class="fas fa-user-plus"></i> Create Account
+        </button>
+      </form>
+      <div class="auth-switch">
+        Already have an account? <a href="#" onclick="showLogin(); return false;">Login here</a>
+      </div>
     </div>
 
     <div class="dashboard-container" id="dashboard">
-      <div class="row">
+      <div class="row mt-4">
         <div class="col-12">
           <h2 class="mb-4">
             <i class="fas fa-chart-line"></i> Account Overview
@@ -327,7 +401,7 @@
 
   <div id="chat-widget">
     <div id="chat-header">
-      <i class="fas fa-comments"></i> Group Chat with AI Assistant
+      <i class="fas fa-comments"></i> AI Banking Assistant
     </div>
     <div id="chat-messages"></div>
     <div id="chat-input-area">
@@ -342,47 +416,145 @@
 
   <script>
     let currentUser = null;
-    let currentUserId = null;
     let currentContext = null;
     let chatMessages = [];
 
-    async function loadUsers() {
+    async function checkSession() {
       try {
-        const response = await fetch('/api/users');
-        const users = await response.json();
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include'
+        });
         
-        const userList = document.getElementById('user-list');
-        userList.innerHTML = '';
-        
-        users.forEach(user => {
-          const btn = document.createElement('button');
-          btn.className = 'btn btn-primary btn-lg me-3 mb-2';
-          btn.innerHTML = `<i class="fas fa-user"></i> ${user.full_name} (@${user.username})`;
-          btn.onclick = () => selectUser(user);
-          userList.appendChild(btn);
+        if (response.ok) {
+          const data = await response.json();
+          currentUser = data.user;
+          showDashboard();
+          return true;
+        }
+      } catch (error) {
+        console.error('Session check failed:', error);
+      }
+      return false;
+    }
+
+    function showLogin() {
+      document.getElementById('login-container').style.display = 'block';
+      document.getElementById('register-container').style.display = 'none';
+      document.getElementById('login-error').style.display = 'none';
+    }
+
+    function showRegister() {
+      document.getElementById('login-container').style.display = 'none';
+      document.getElementById('register-container').style.display = 'block';
+      document.getElementById('register-error').style.display = 'none';
+      document.getElementById('register-success').style.display = 'none';
+    }
+
+    function showDashboard() {
+      document.getElementById('login-container').style.display = 'none';
+      document.getElementById('register-container').style.display = 'none';
+      document.getElementById('dashboard').classList.add('active');
+      document.getElementById('user-info').style.display = 'block';
+      document.getElementById('chat-widget').classList.add('active');
+      document.getElementById('current-user-display').textContent = 
+        `Welcome, ${currentUser.full_name}!`;
+      
+      loadAccountData();
+      loadChatMessages();
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('login-username').value;
+      const password = document.getElementById('login-password').value;
+      const errorDiv = document.getElementById('login-error');
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          currentUser = data.user;
+          showDashboard();
+        } else {
+          errorDiv.textContent = data.error || 'Login failed';
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        errorDiv.textContent = 'Connection error. Please try again.';
+        errorDiv.style.display = 'block';
+      }
+    });
+
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const full_name = document.getElementById('register-fullname').value;
+      const email = document.getElementById('register-email').value;
+      const username = document.getElementById('register-username').value;
+      const password = document.getElementById('register-password').value;
+      const errorDiv = document.getElementById('register-error');
+      const successDiv = document.getElementById('register-success');
+
+      try {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, full_name, email })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          successDiv.textContent = data.message;
+          successDiv.style.display = 'block';
+          errorDiv.style.display = 'none';
+          document.getElementById('register-form').reset();
+          
+          setTimeout(() => {
+            showLogin();
+            document.getElementById('login-username').value = username;
+          }, 2000);
+        } else {
+          errorDiv.textContent = data.error || 'Registration failed';
+          errorDiv.style.display = 'block';
+          successDiv.style.display = 'none';
+        }
+      } catch (error) {
+        errorDiv.textContent = 'Connection error. Please try again.';
+        errorDiv.style.display = 'block';
+      }
+    });
+
+    async function logout() {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'include'
         });
       } catch (error) {
-        console.error('Error loading users:', error);
+        console.error('Logout error:', error);
       }
+      
+      currentUser = null;
+      document.getElementById('dashboard').classList.remove('active');
+      document.getElementById('user-info').style.display = 'none';
+      document.getElementById('chat-widget').classList.remove('active');
+      showLogin();
     }
 
-    async function selectUser(user) {
-      currentUser = user.username;
-      currentUserId = user.id;
-      
-      document.getElementById('current-user-display').textContent = 
-        `Logged in as: ${user.full_name}`;
-      
-      document.getElementById('user-selector').style.display = 'none';
-      document.getElementById('dashboard').classList.add('active');
-      
-      await loadAccountData(user.id);
-      await loadChatMessages();
-    }
-
-    async function loadAccountData(userId) {
+    async function loadAccountData() {
       try {
-        const response = await fetch(`/api/user-context/${userId}`);
+        const response = await fetch('/api/user-context', {
+          credentials: 'include'
+        });
         const data = await response.json();
         currentContext = data;
         
@@ -408,11 +580,9 @@
                   <div class="label">SSN Last 4</div>
                   <div class="value">***-**-${account.ssn_last4}</div>
                 </div>
-                <div class="api-key-display">
-                  <strong>API Key:</strong><br>${account.api_key}
-                </div>
-                <div class="session-token-display">
-                  <strong>Session Token:</strong><br>${account.session_token}
+                <div class="sensitive-info">
+                  <div class="label">API Key</div>
+                  <div class="value">${account.api_key}</div>
                 </div>
               </div>
             </div>
@@ -424,7 +594,7 @@
         transactionsContainer.innerHTML = '';
         
         if (data.transactions.length === 0) {
-          transactionsContainer.innerHTML = '<p class="text-muted">No transactions found.</p>';
+          transactionsContainer.innerHTML = '<p class="text-muted">No transactions yet.</p>';
         } else {
           data.transactions.forEach(txn => {
             const txnRow = document.createElement('div');
@@ -460,7 +630,9 @@
 
     async function loadChatMessages() {
       try {
-        const response = await fetch('/api/chat/messages');
+        const response = await fetch('/api/chat/messages', {
+          credentials: 'include'
+        });
         chatMessages = await response.json();
         displayChatMessages();
       } catch (error) {
@@ -502,11 +674,6 @@
       
       if (!message) return;
       
-      if (!currentUser) {
-        alert('Please select a user first!');
-        return;
-      }
-      
       input.value = '';
       const sendBtn = document.getElementById('chat-send-btn');
       sendBtn.disabled = true;
@@ -514,12 +681,9 @@
       try {
         const response = await fetch('/api/chat/send', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
-            userId: currentUserId,
-            username: currentUser,
             message: message,
             pageContext: currentContext
           })
@@ -532,15 +696,14 @@
         displayChatMessages();
       } catch (error) {
         console.error('Error sending message:', error);
-        alert('Error sending message. Make sure your OpenAI API key is set!');
+        alert('Error sending message. Please try again.');
       } finally {
         sendBtn.disabled = false;
         input.focus();
       }
     });
 
-    loadUsers();
+    checkSession();
   </script>
 </body>
 </html>
-
