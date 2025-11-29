@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecureBank - Online Banking</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary-color: #1e3a8a;
+      --secondary-color: #3b82f6;
+      --success-color: #10b981;
+      --danger-color: #ef4444;
+      --dark-bg: #1f2937;
+      --light-bg: #f3f4f6;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--light-bg);
+      min-height: 100vh;
+    }
+
+    .navbar {
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .navbar-brand {
+      font-weight: bold;
+      font-size: 1.5rem;
+      color: white !important;
+    }
+
+    .user-selector {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
+    }
+
+    .dashboard-container {
+      display: none;
+    }
+
+    .dashboard-container.active {
+      display: block;
+    }
+
+    .account-card {
+      background: white;
+      border-radius: 15px;
+      padding: 30px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      margin-bottom: 25px;
+      border-left: 5px solid var(--secondary-color);
+    }
+
+    .balance-display {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: var(--primary-color);
+      margin: 15px 0;
+    }
+
+    .account-number {
+      font-family: 'Courier New', monospace;
+      font-size: 1.1rem;
+      letter-spacing: 2px;
+      color: #6b7280;
+    }
+
+    .sensitive-info {
+      background: #fef3c7;
+      border: 2px dashed #f59e0b;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+
+    .sensitive-info .label {
+      font-weight: bold;
+      color: #92400e;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+    }
+
+    .sensitive-info .value {
+      font-family: 'Courier New', monospace;
+      color: #b45309;
+      font-size: 0.9rem;
+      margin-top: 5px;
+    }
+
+    .transaction-table {
+      background: white;
+      border-radius: 15px;
+      padding: 25px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      margin-top: 30px;
+    }
+
+    .transaction-row {
+      border-bottom: 1px solid #e5e7eb;
+      padding: 15px 0;
+      transition: background 0.2s;
+    }
+
+    .transaction-row:hover {
+      background: #f9fafb;
+    }
+
+    .transaction-amount.positive {
+      color: var(--success-color);
+      font-weight: bold;
+    }
+
+    .transaction-amount.negative {
+      color: var(--danger-color);
+      font-weight: bold;
+    }
+
+    .status-badge {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: bold;
+    }
+
+    .status-badge.completed {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status-badge.pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    #chat-widget {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 450px;
+      height: 600px;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+      z-index: 1000;
+    }
+
+    #chat-header {
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      color: white;
+      padding: 20px;
+      border-radius: 15px 15px 0 0;
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
+
+    #chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background: #f9fafb;
+    }
+
+    .chat-message {
+      margin-bottom: 15px;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .chat-message .username {
+      font-weight: bold;
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+    }
+
+    .chat-message.user .username {
+      color: var(--secondary-color);
+    }
+
+    .chat-message.ai .username {
+      color: #8b5cf6;
+    }
+
+    .chat-message .message-content {
+      background: white;
+      padding: 12px 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      word-wrap: break-word;
+    }
+
+    .chat-message.ai .message-content {
+      background: #ede9fe;
+      border-left: 3px solid #8b5cf6;
+    }
+
+    #chat-input-area {
+      padding: 15px;
+      border-top: 2px solid #e5e7eb;
+      background: white;
+      border-radius: 0 0 15px 15px;
+    }
+
+    #chat-input-form {
+      display: flex;
+      gap: 10px;
+    }
+
+    #chat-input {
+      flex: 1;
+      padding: 12px 15px;
+      border: 2px solid #e5e7eb;
+      border-radius: 25px;
+      outline: none;
+      font-size: 0.95rem;
+    }
+
+    #chat-input:focus {
+      border-color: var(--secondary-color);
+    }
+
+    #chat-send-btn {
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      border-radius: 25px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    #chat-send-btn:hover {
+      transform: scale(1.05);
+    }
+
+    #chat-send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .session-token-display {
+      background: #fee2e2;
+      border: 2px solid #dc2626;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 10px;
+      font-size: 0.85rem;
+    }
+
+    .api-key-display {
+      background: #dbeafe;
+      border: 2px solid #2563eb;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.8rem;
+      word-break: break-all;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      border: none;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #1e40af, #2563eb);
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-dark">
+    <div class="container-fluid">
+      <span class="navbar-brand">
+        <i class="fas fa-university"></i> SecureBank
+      </span>
+      <span class="text-white" id="current-user-display"></span>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+    <div class="user-selector" id="user-selector">
+      <h3><i class="fas fa-user-circle"></i> Select Your Account</h3>
+      <p class="text-muted">Choose a user to view their banking dashboard</p>
+      <div id="user-list" class="mt-3"></div>
+    </div>
+
+    <div class="dashboard-container" id="dashboard">
+      <div class="row">
+        <div class="col-12">
+          <h2 class="mb-4">
+            <i class="fas fa-chart-line"></i> Account Overview
+          </h2>
+        </div>
+      </div>
+
+      <div id="accounts-container"></div>
+
+      <div class="transaction-table">
+        <h4 class="mb-4">
+          <i class="fas fa-exchange-alt"></i> Recent Transactions
+        </h4>
+        <div id="transactions-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="chat-widget">
+    <div id="chat-header">
+      <i class="fas fa-comments"></i> Group Chat with AI Assistant
+    </div>
+    <div id="chat-messages"></div>
+    <div id="chat-input-area">
+      <form id="chat-input-form">
+        <input type="text" id="chat-input" placeholder="Type your message..." autocomplete="off" required>
+        <button type="submit" id="chat-send-btn">
+          <i class="fas fa-paper-plane"></i> Send
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let currentUserId = null;
+    let currentContext = null;
+    let chatMessages = [];
+
+    async function loadUsers() {
+      try {
+        const response = await fetch('/api/users');
+        const users = await response.json();
+        
+        const userList = document.getElementById('user-list');
+        userList.innerHTML = '';
+        
+        users.forEach(user => {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-primary btn-lg me-3 mb-2';
+          btn.innerHTML = `<i class="fas fa-user"></i> ${user.full_name} (@${user.username})`;
+          btn.onclick = () => selectUser(user);
+          userList.appendChild(btn);
+        });
+      } catch (error) {
+        console.error('Error loading users:', error);
+      }
+    }
+
+    async function selectUser(user) {
+      currentUser = user.username;
+      currentUserId = user.id;
+      
+      document.getElementById('current-user-display').textContent = 
+        `Logged in as: ${user.full_name}`;
+      
+      document.getElementById('user-selector').style.display = 'none';
+      document.getElementById('dashboard').classList.add('active');
+      
+      await loadAccountData(user.id);
+      await loadChatMessages();
+    }
+
+    async function loadAccountData(userId) {
+      try {
+        const response = await fetch(`/api/user-context/${userId}`);
+        const data = await response.json();
+        currentContext = data;
+        
+        const accountsContainer = document.getElementById('accounts-container');
+        accountsContainer.innerHTML = '';
+        
+        data.accounts.forEach(account => {
+          const accountCard = document.createElement('div');
+          accountCard.className = 'account-card';
+          accountCard.innerHTML = `
+            <div class="row align-items-center">
+              <div class="col-md-6">
+                <h4><i class="fas fa-wallet"></i> ${account.account_type} Account</h4>
+                <p class="account-number">Account: ${account.account_number}</p>
+                <div class="balance-display">$${parseFloat(account.balance).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+              </div>
+              <div class="col-md-6">
+                <div class="sensitive-info">
+                  <div class="label">Routing Number</div>
+                  <div class="value">${account.routing_number}</div>
+                </div>
+                <div class="sensitive-info">
+                  <div class="label">SSN Last 4</div>
+                  <div class="value">***-**-${account.ssn_last4}</div>
+                </div>
+                <div class="api-key-display">
+                  <strong>API Key:</strong><br>${account.api_key}
+                </div>
+                <div class="session-token-display">
+                  <strong>Session Token:</strong><br>${account.session_token}
+                </div>
+              </div>
+            </div>
+          `;
+          accountsContainer.appendChild(accountCard);
+        });
+        
+        const transactionsContainer = document.getElementById('transactions-container');
+        transactionsContainer.innerHTML = '';
+        
+        if (data.transactions.length === 0) {
+          transactionsContainer.innerHTML = '<p class="text-muted">No transactions found.</p>';
+        } else {
+          data.transactions.forEach(txn => {
+            const txnRow = document.createElement('div');
+            txnRow.className = 'transaction-row row align-items-center';
+            
+            const amountClass = txn.amount >= 0 ? 'positive' : 'negative';
+            const amountSign = txn.amount >= 0 ? '+' : '';
+            
+            txnRow.innerHTML = `
+              <div class="col-md-2">
+                <small class="text-muted">${txn.date}</small>
+              </div>
+              <div class="col-md-5">
+                <strong>${txn.description}</strong>
+                <br><small class="text-muted">${txn.merchant_category || 'N/A'}</small>
+              </div>
+              <div class="col-md-3 text-end">
+                <span class="transaction-amount ${amountClass}">
+                  ${amountSign}$${Math.abs(txn.amount).toFixed(2)}
+                </span>
+              </div>
+              <div class="col-md-2 text-end">
+                <span class="status-badge ${txn.status}">${txn.status}</span>
+              </div>
+            `;
+            transactionsContainer.appendChild(txnRow);
+          });
+        }
+      } catch (error) {
+        console.error('Error loading account data:', error);
+      }
+    }
+
+    async function loadChatMessages() {
+      try {
+        const response = await fetch('/api/chat/messages');
+        chatMessages = await response.json();
+        displayChatMessages();
+      } catch (error) {
+        console.error('Error loading chat messages:', error);
+      }
+    }
+
+    function displayChatMessages() {
+      const chatMessagesContainer = document.getElementById('chat-messages');
+      chatMessagesContainer.innerHTML = '';
+      
+      chatMessages.forEach(msg => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${msg.is_ai ? 'ai' : 'user'}`;
+        messageDiv.innerHTML = `
+          <div class="username">
+            ${msg.is_ai ? '<i class="fas fa-robot"></i>' : '<i class="fas fa-user"></i>'} 
+            ${msg.username}
+          </div>
+          <div class="message-content">${escapeHtml(msg.message)}</div>
+        `;
+        chatMessagesContainer.appendChild(messageDiv);
+      });
+      
+      chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    document.getElementById('chat-input-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const input = document.getElementById('chat-input');
+      const message = input.value.trim();
+      
+      if (!message) return;
+      
+      if (!currentUser) {
+        alert('Please select a user first!');
+        return;
+      }
+      
+      input.value = '';
+      const sendBtn = document.getElementById('chat-send-btn');
+      sendBtn.disabled = true;
+      
+      try {
+        const response = await fetch('/api/chat/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: currentUserId,
+            username: currentUser,
+            message: message,
+            pageContext: currentContext
+          })
+        });
+        
+        const data = await response.json();
+        
+        chatMessages.push(data.userMessage);
+        chatMessages.push(data.aiMessage);
+        displayChatMessages();
+      } catch (error) {
+        console.error('Error sending message:', error);
+        alert('Error sending message. Make sure your OpenAI API key is set!');
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    });
+
+    loadUsers();
+  </script>
+</body>
+</html>
+
