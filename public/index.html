@@ -639,32 +639,99 @@
         console.error('Error loading chat messages:', error);
       }
     }
+// Allowed properties/methods for fine grained sandboxing on message content divs
+    const allowedProps = ['textContent', 'innerText', 'className', 'classList'];
 
-    function displayChatMessages() {
-      const chatMessagesContainer = document.getElementById('chat-messages');
-      chatMessagesContainer.innerHTML = '';
-      
-      chatMessages.forEach(msg => {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `chat-message ${msg.is_ai ? 'ai' : 'user'}`;
-        messageDiv.innerHTML = `
-          <div class="username">
-            ${msg.is_ai ? '<i class="fas fa-robot"></i>' : '<i class="fas fa-user"></i>'} 
-            ${msg.username}
-          </div>
-          <div class="message-content">${escapeHtml(msg.message)}</div>
-        `;
-        chatMessagesContainer.appendChild(messageDiv);
-      });
-      
-      chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+    // Proxy handler to control DOM access finely
+    const sandboxHandler = {
+      get(target, prop) {
+        if (allowedProps.includes(prop)) {
+          const value = target[prop];
+          return typeof value === 'function' ? value.bind(target) : value;
+        }
+        throw new Error(`Access to property '${prop}' is blocked by sandbox.`);
+      },
+      set(target, prop, value) {
+        if (allowedProps.includes(prop)) {
+          target[prop] = value;
+          return true;
+        }
+        throw new Error(`Modifying property '${prop}' is blocked by sandbox.`);
+      }
+    };
+
+   function displayChatMessages() {
+  const chatMessagesContainer = document.getElementById('chat-messages');
+  chatMessagesContainer.innerHTML = '';
+
+  chatMessages.forEach(msg => {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${msg.is_ai ? 'ai' : 'user'}`;
+
+    const usernameDiv = document.createElement('div');
+    usernameDiv.className = 'username';
+    usernameDiv.innerHTML = `${msg.is_ai ? '<i class="fas fa-robot"></i>' : '<i class="fas fa-user"></i>'} ${msg.username}`;
+
+    const messageContentDiv = document.createElement('div');
+    messageContentDiv.className = 'message-content';
+
+    // Create sandbox proxy to allow only textContent, innerText, classList etc.
+    const sandboxHandler = {
+      get(target, prop) {
+        const allowed = ['textContent', 'innerText', 'className', 'classList',
+  'appendChild', 'removeChild', 'innerHTML',
+  'addEventListener', 'removeEventListener'];
+        if (allowed.includes(prop)) {
+          const value = target[prop];
+          return typeof value === 'function' ? value.bind(target) : value;
+        }
+        throw new Error(`Access to property '${prop}' is blocked by sandbox.`);
+        return Reflect.get(target, prop, receiver);
+      },
+      set(target, prop, value) {
+        const allowedSet = ['textContent', 'innerText', 'className', 'classList',
+  'appendChild', 'removeChild', 'innerHTML',
+  'addEventListener', 'removeEventListener'];
+        if (allowedSet.includes(prop)) {
+          target[prop] = value;
+          return true;
+        }
+        throw new Error(`Modifying property '${prop}' is blocked by sandbox.`);
+        return Reflect.set(target, prop, value, receiver);
+      }
+    };
+    const sandboxedContent = new Proxy(messageContentDiv, sandboxHandler);
+
+    // Check if message contains SVG image URL, render safely using <img>
+    const svgUrlMatch = msg.message.match(/https?:\/\/.*\.svg(\?[^ ]*)?/i);
+    if (svgUrlMatch) {
+      const img = document.createElement('img');
+      img.src = svgUrlMatch[0];
+      img.alt = 'SVG Image';
+      img.style.maxWidth = '100%';
+      // Append image safely inside the sandboxed content container
+      sandboxedContent.appendChild(img);
+    } else {
+      // Otherwise render plain text message normally
+      //sandboxedContent.textContent = msg.message;
+      sandboxedContent.innerHTML = msg.message
     }
 
-    function escapeHtml(text) {
+    messageDiv.appendChild(usernameDiv);
+    messageDiv.appendChild(messageContentDiv);
+
+    chatMessagesContainer.appendChild(messageDiv);
+  });
+
+  chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+}
+
+
+   /* function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
-    }
+    }*/
 
     document.getElementById('chat-input-form').addEventListener('submit', async (e) => {
       e.preventDefault();
