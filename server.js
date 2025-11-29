@@ -17,7 +17,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('public'));
 
-const OLLAMA_API_URL = process.env.OLLAMA_API_URL || 'http://localhost:11434';
+const OLLAMA_API_URL = process.env.OLLAMA_API_URL || 'http://localhost:11434/api/generate';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'mistral';
 
 let db;
@@ -424,7 +424,7 @@ app.post('/api/chat/send', authenticateSession, async (req, res) => {
       const systemPrompt = `You are a helpful banking assistant. You have access to the user's page content and can help them with their banking needs.${contextString}`;
       const fullPrompt = `${systemPrompt}\n\nUser: ${message}\n\nAssistant:`;
       
-      const response = await axios.post(`${OLLAMA_API_URL}/api/generate`, {
+      const response = await axios.post(OLLAMA_API_URL, {
         model: OLLAMA_MODEL,
         prompt: fullPrompt,
         stream: false,
@@ -461,7 +461,7 @@ app.post('/api/chat/send', authenticateSession, async (req, res) => {
     } catch (apiError) {
       console.error('Ollama API error:', apiError);
 
-      const errorMsg = 'Sorry, I encountered an error processing your request. Make sure Ollama is running with the Mistral model (run: ollama run mistral)';
+      const errorMsg = 'Sorry, I encountered an error processing your request. Make sure Ollama is running with the Mistral model.';
       db.run('INSERT INTO chat_messages (username, message, is_ai) VALUES (?, ?, ?)',
         ['AI Assistant', errorMsg, 1]);
       
@@ -517,10 +517,8 @@ initializeDatabase().then(() => {
 ╚════════════════════════════════════════════════════════════════╝
     `);
     
-    if (!process.env.OPENAI_API_KEY) {
-      console.log('⚠️  WARNING: OPENAI_API_KEY not set in .env file!');
-      console.log('   The chat widget will not work without an API key.');
-    }
+    console.log('🤖 Using Ollama with model:', OLLAMA_MODEL);
+    console.log('📡 Ollama API URL:', OLLAMA_API_URL);
   });
 });
 
