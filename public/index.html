@@ -403,6 +403,7 @@
     <div id="chat-header">
       <i class="fas fa-comments"></i> AI Banking Assistant
     </div>
+    <div id="chat-error" class="alert alert-danger mx-3 mt-3 mb-0" style="display: none;"></div>
     <div id="chat-messages"></div>
     <div id="chat-input-area">
       <form id="chat-input-form">
@@ -418,6 +419,28 @@
     let currentUser = null;
     let currentContext = null;
     let chatMessages = [];
+
+    function showChatError(message = '') {
+      const errorBanner = document.getElementById('chat-error');
+      if (!errorBanner) return;
+      if (!message) {
+        errorBanner.style.display = 'none';
+        errorBanner.textContent = '';
+        return;
+      }
+      errorBanner.textContent = message;
+      errorBanner.style.display = 'block';
+    }
+
+    function safeDisplayChatMessages() {
+      try {
+        displayChatMessages();
+        showChatError('');
+      } catch (error) {
+        console.error('Error rendering chat messages:', error);
+        showChatError('Unable to render some messages safely. Check console for details.');
+      }
+    }
 
     async function checkSession() {
       try {
@@ -634,9 +657,10 @@
           credentials: 'include'
         });
         chatMessages = await response.json();
-        displayChatMessages();
+        safeDisplayChatMessages();
       } catch (error) {
         console.error('Error loading chat messages:', error);
+        showChatError('Unable to load chat history. Please refresh and try again.');
       }
     }
 // Allowed properties/methods for fine grained sandboxing on message content divs
@@ -900,15 +924,28 @@
             pageContext: currentContext
           })
         });
-        
-        const data = await response.json();
+        let data;
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          throw new Error('Invalid response from server.');
+        }
+
+        if (!response.ok) {
+          const errorMsg = data && data.error ? data.error : 'Failed to send message.';
+          throw new Error(errorMsg);
+        }
+
+        if (!data.userMessage || !data.aiMessage) {
+          throw new Error('Server response missing chat message payloads.');
+        }
         
         chatMessages.push(data.userMessage);
         chatMessages.push(data.aiMessage);
-        displayChatMessages();
+        safeDisplayChatMessages();
       } catch (error) {
         console.error('Error sending message:', error);
-        alert('Error sending message. Please try again.');
+        showChatError(error.message || 'Error sending message. Please try again.');
       } finally {
         sendBtn.disabled = false;
         input.focus();
