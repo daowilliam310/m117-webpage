@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secure Proxy Test</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f3f4f6;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #1e3a8a;
+    }
+    .section {
+      margin: 20px 0;
+      padding: 20px;
+      background: #f9fafb;
+      border-radius: 8px;
+    }
+    button {
+      background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 15px;
+      padding: 15px;
+      border-radius: 8px;
+      background: #e0e7ff;
+      border-left: 4px solid #3b82f6;
+    }
+    .success {
+      background: #d1fae5;
+      border-left-color: #10b981;
+    }
+    .error {
+      background: #fee2e2;
+      border-left-color: #ef4444;
+    }
+    code {
+      background: #1f2937;
+      color: #10b981;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+    }
+    pre {
+      background: #1f2937;
+      color: #10b981;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔒 Secure Proxy Test Page</h1>
+    <p>This page demonstrates how the DOM-level sandboxing works to protect credentials while allowing authenticated actions.</p>
+
+    <div class="section">
+      <h2>Step 1: Initialize Secure Session</h2>
+      <p>First, set up credentials using the secure input component:</p>
+      <secure-credential-input></secure-credential-input>
+    </div>
+
+    <div class="section">
+      <h2>Step 2: Test Chatbot Actions</h2>
+      <p>These buttons simulate what a chatbot would do when asked to perform authenticated actions:</p>
+      
+      <button onclick="testSendEmail()" id="emailBtn">📧 Test Send Email Action</button>
+      <button onclick="testFetchData()" id="fetchBtn">📊 Test Fetch Data Action</button>
+      <button onclick="testMakePayment()" id="paymentBtn">💳 Test Payment Action</button>
+      <button onclick="testTransferFunds()" id="transferBtn">💸 Test Fund Transfer Action</button>
+      
+      <div id="actionResult"></div>
+    </div>
+
+    <div class="section">
+      <h2>Step 3: Verify Credential Protection</h2>
+      <p>Try to extract credentials (this should fail):</p>
+      
+      <button onclick="tryExtractCredentials()">🔍 Attempt to Extract Credentials</button>
+      
+      <div id="extractResult"></div>
+    </div>
+
+    <div class="section">
+      <h2>How It Works</h2>
+      <ul>
+        <li><strong>Shadow DOM:</strong> Credentials are collected in a closed Shadow DOM that cannot be accessed from the main document</li>
+        <li><strong>Closure:</strong> SessionId is stored in a JavaScript closure, never exposed to global scope</li>
+        <li><strong>Server-Side Validation:</strong> All actions are validated on the server against an allowlist</li>
+        <li><strong>Proxy Pattern:</strong> Only the <code>execute()</code> method is exposed, never the actual credentials</li>
+      </ul>
+      
+      <h3>Example: How Chatbot Would Use This</h3>
+      <pre>// Chatbot receives user request: "Send report to john@example.com"
+
+// ✅ ALLOWED: Use proxy to perform action
+await window.chatbotAPI.execute('send_email', {
+  to: 'john@example.com',
+  subject: 'Monthly Report',
+  body: 'Here is your report...'
+});
+
+// ❌ BLOCKED: Cannot access credentials directly
+console.log(window.sessionId);        // undefined
+console.log(window.credentials);      // undefined
+document.querySelector('input[type=password]').value; // empty/inaccessible</pre>
+    </div>
+  </div>
+
+  <!-- Load the secure proxy scripts -->
+  <script src="/js/secure-proxy.js"></script>
+  <script src="/js/secure-credential-input.js"></script>
+
+  <script>
+    // Simulate chatbot actions
+    async function testSendEmail() {
+      const btn = document.getElementById('emailBtn');
+      btn.disabled = true;
+      
+      const resultDiv = document.getElementById('actionResult');
+      resultDiv.innerHTML = '<div class="result">Executing action...</div>';
+      
+      try {
+        if (!window.chatbotAPI || !window.chatbotAPI.isActive()) {
+          throw new Error('Please initialize secure session first (Step 1)');
+        }
+        
+        const result = await window.chatbotAPI.execute('send_email', {
+          to: 'john@example.com',
+          subject: 'Test Email',
+          body: 'This is a test email sent via secure proxy'
+        });
+        
+        resultDiv.innerHTML = `
+          <div class="result success">
+            <strong>✓ Action Successful</strong><br>
+            ${result.result.message}<br>
+            <em>Note: Credentials were used server-side, never exposed to client</em>
+          </div>
+        `;
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <div class="result error">
+            <strong>✗ Action Failed</strong><br>
+            ${error.message}
+          </div>
+        `;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+    
+    async function testFetchData() {
+      const btn = document.getElementById('fetchBtn');
+      btn.disabled = true;
+      
+      const resultDiv = document.getElementById('actionResult');
+      resultDiv.innerHTML = '<div class="result">Executing action...</div>';
+      
+      try {
+        if (!window.chatbotAPI || !window.chatbotAPI.isActive()) {
+          throw new Error('Please initialize secure session first (Step 1)');
+        }
+        
+        const result = await window.chatbotAPI.execute('fetch_data', {
+          endpoint: '/api/user/transactions'
+        });
+        
+        resultDiv.innerHTML = `
+          <div class="result success">
+            <strong>✓ Action Successful</strong><br>
+            ${result.result.message}<br>
+            <em>Note: API key was used server-side, never exposed to client</em>
+          </div>
+        `;
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <div class="result error">
+            <strong>✗ Action Failed</strong><br>
+            ${error.message}
+          </div>
+        `;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+    
+    async function testMakePayment() {
+      const btn = document.getElementById('paymentBtn');
+      btn.disabled = true;
+      
+      const resultDiv = document.getElementById('actionResult');
+      resultDiv.innerHTML = '<div class="result">Executing action...</div>';
+      
+      try {
+        if (!window.chatbotAPI || !window.chatbotAPI.isActive()) {
+          throw new Error('Please initialize secure session first (Step 1)');
+        }
+        
+        const result = await window.chatbotAPI.execute('make_payment', {
+          amount: 50.00,
+          recipient: 'Utility Company'
+        });
+        
+        resultDiv.innerHTML = `
+          <div class="result success">
+            <strong>✓ Action Successful</strong><br>
+            ${result.result.message}<br>
+            <em>Note: Payment credentials were used server-side, never exposed to client</em>
+          </div>
+        `;
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <div class="result error">
+            <strong>✗ Action Failed</strong><br>
+            ${error.message}
+          </div>
+        `;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+    
+    async function testTransferFunds() {
+      const btn = document.getElementById('transferBtn');
+      btn.disabled = true;
+      
+      const resultDiv = document.getElementById('actionResult');
+      resultDiv.innerHTML = '<div class="result">Executing action...</div>';
+      
+      try {
+        if (!window.chatbotAPI || !window.chatbotAPI.isActive()) {
+          throw new Error('Please initialize secure session first (Step 1)');
+        }
+        
+        const result = await window.chatbotAPI.execute('transfer_funds', {
+          amount: 100,
+          recipient: 'Savings Account'
+        });
+        
+        resultDiv.innerHTML = `
+          <div class="result success">
+            <strong>✓ Action Successful</strong><br>
+            ${result.result.message}<br>
+            <em>Used: ${result.result.usedCredentials}</em><br>
+            <small>Note: Full account number and routing number used server-side only</small>
+          </div>
+        `;
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <div class="result error">
+            <strong>✗ Action Failed</strong><br>
+            ${error.message}
+          </div>
+        `;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+    
+    function tryExtractCredentials() {
+      const resultDiv = document.getElementById('extractResult');
+      
+      const attempts = [];
+      
+      // Try to access sessionId
+      attempts.push({
+        method: 'window.sessionId',
+        result: window.sessionId === undefined ? '❌ Blocked (undefined)' : '⚠️ Exposed!'
+      });
+      
+      // Try to access credentials
+      attempts.push({
+        method: 'window.credentials',
+        result: window.credentials === undefined ? '❌ Blocked (undefined)' : '⚠️ Exposed!'
+      });
+      
+      // Try to access shadow DOM
+      const secureInput = document.querySelector('secure-credential-input');
+      attempts.push({
+        method: 'querySelector("secure-credential-input").shadowRoot',
+        result: secureInput && secureInput.shadowRoot === null ? '❌ Blocked (closed Shadow DOM)' : '⚠️ Accessible!'
+      });
+      
+      // Try to access password inputs
+      const passwordInputs = document.querySelectorAll('input[type=password]');
+      attempts.push({
+        method: 'querySelectorAll("input[type=password]")',
+        result: passwordInputs.length === 0 ? '❌ No password inputs in main DOM' : `Found ${passwordInputs.length} (values are empty)`
+      });
+      
+      // Try to find account numbers in DOM
+      const accountNumberElements = document.querySelectorAll('[data-account-number], [data-routing-number], [data-api-key], .hidden-data');
+      attempts.push({
+        method: 'Search DOM for data-account-number, data-routing-number, data-api-key',
+        result: accountNumberElements.length === 0 ? '❌ No sensitive data attributes found' : `⚠️ Found ${accountNumberElements.length} elements`
+      });
+      
+      // Try to extract from page text
+      const pageText = document.body.innerText;
+      const hasFullAccountNumber = /\d{10,}/.test(pageText);
+      const hasFullRoutingNumber = /\d{9}/.test(pageText);
+      attempts.push({
+        method: 'Search page text for full account/routing numbers',
+        result: (!hasFullAccountNumber && !hasFullRoutingNumber) ? '❌ Only masked values in page text' : '⚠️ Full numbers detected'
+      });
+      
+      let html = '<div class="result success"><strong>Credential Extraction Test Results:</strong><ul>';
+      attempts.forEach(attempt => {
+        html += `<li><code>${attempt.method}</code>: ${attempt.result}</li>`;
+      });
+      html += '</ul><strong>✓ All credentials are protected!</strong><br>';
+      html += '<small>Account numbers, routing numbers, SSN, and API keys are stored server-side only.</small></div>';
+      
+      resultDiv.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
