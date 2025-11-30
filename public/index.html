@@ -393,6 +393,13 @@
     </div>
 
     <div class="dashboard-container" id="dashboard">
+      <!-- Secure Credential Input Component -->
+      <div class="row mt-4">
+        <div class="col-12">
+          <secure-credential-input></secure-credential-input>
+        </div>
+      </div>
+
       <div class="row mt-4">
         <div class="col-12">
           <h2 class="mb-4">
@@ -427,6 +434,46 @@
       </form>
     </div>
   </div>
+
+  <!-- Secure Proxy Scripts - Load before main application -->
+  <!-- 
+    DOM-Level Sandboxing Implementation:
+    
+    These scripts implement a credential isolation architecture that prevents
+    the LLM chatbot from extracting sensitive credentials through prompt injection
+    attacks, while still allowing it to perform authenticated actions.
+    
+    How it works:
+    1. Credentials are collected via Shadow DOM (secure-credential-input.js)
+       - Uses 'closed' mode Shadow DOM, preventing external access
+       - Credentials never stored in regular DOM or accessible variables
+       
+    2. Credentials sent immediately to server (secure-proxy.js)
+       - Server creates a session with unique sessionId
+       - SessionId stored in closure, never exposed to global scope
+       - Only proxy methods exposed via window.chatbotAPI
+       
+    3. Chatbot can request actions through proxy:
+       - window.chatbotAPI.execute(action, params)
+       - Server validates action against allowlist
+       - Server performs action using stored credentials
+       - Result returned to chatbot (without credentials)
+       
+    4. Original Q&A functionality preserved:
+       - Chatbot can still read public DOM
+       - Chatbot can still answer questions
+       - Chatbot can still have conversations
+       - Only credential access is restricted
+       
+    Benefits:
+    - LLM cannot scrape credentials from DOM (they're not there)
+    - LLM cannot access sessionId (stored in closure)
+    - LLM can still perform authenticated actions via proxy
+    - Server-side validation prevents unauthorized actions
+    - Defense in depth: Shadow DOM + Closure + Server validation
+  -->
+  <script src="/js/secure-proxy.js"></script>
+  <script src="/js/secure-credential-input.js"></script>
 
   <script>
     let currentUser = null;
@@ -601,16 +648,11 @@
           const accountCard = document.createElement('div');
           accountCard.className = 'account-card';
           
-          // Store sensitive data in hidden data attributes
-          accountCard.setAttribute('data-account-number', account.account_number);
-          accountCard.setAttribute('data-routing-number', account.routing_number);
-          accountCard.setAttribute('data-ssn-last4', account.ssn_last4);
-          accountCard.setAttribute('data-api-key', account.api_key);
-          
-          // Mask sensitive data for display
-          const maskedAccountNumber = '****' + account.account_number.slice(-4);
-          const maskedRoutingNumber = '*****' + account.routing_number.slice(-4);
-          const maskedApiKey = account.api_key.slice(0, 8) + '...' + account.api_key.slice(-4);
+          // NO SENSITIVE DATA STORED IN DOM - all credentials are server-side only
+          // Only display masked versions
+          const maskedAccountNumber = '****' + account.account_number_last4;
+          const maskedRoutingNumber = '*****' + account.routing_number_last4;
+          const maskedApiKey = '********...****'; // Fully masked since we don't have it
           
           accountCard.innerHTML = `
             <div class="row align-items-center">
@@ -623,17 +665,17 @@
                 <div class="sensitive-info">
                   <div class="label">Routing Number</div>
                   <div class="masked-value">${maskedRoutingNumber}</div>
-                  <span class="hidden-data">${account.routing_number}</span>
+                  <small class="text-muted d-block mt-1">🔒 Full number secured server-side</small>
                 </div>
                 <div class="sensitive-info">
                   <div class="label">SSN Last 4</div>
                   <div class="masked-value">***-**-${account.ssn_last4}</div>
-                  <span class="hidden-data">${account.ssn_last4}</span>
+                  <small class="text-muted d-block mt-1">🔒 Protected credential</small>
                 </div>
                 <div class="sensitive-info">
                   <div class="label">API Key</div>
                   <div class="masked-value">${maskedApiKey}</div>
-                  <span class="hidden-data">${account.api_key}</span>
+                  <small class="text-muted d-block mt-1">🔒 Full key secured server-side</small>
                 </div>
               </div>
             </div>
@@ -940,6 +982,27 @@
     });
 
     checkSession();
+
+    // Listen for secure credentials being set
+    document.addEventListener('credentials-set', (e) => {
+      console.log('✓ Secure session initialized - chatbot can now perform authenticated actions');
+      console.log('Available actions:', ['send_email', 'fetch_data', 'make_payment']);
+      
+      // Show a notification to the user
+      const chatMessages = document.getElementById('chat-messages');
+      if (chatMessages) {
+        const notificationDiv = document.createElement('div');
+        notificationDiv.className = 'chat-message ai';
+        notificationDiv.innerHTML = `
+          <div class="username"><i class="fas fa-robot"></i> System</div>
+          <div class="message-content" style="background: #d1f4e0; border-left: 3px solid #10b981;">
+            🔒 Secure session active! I can now help you with authenticated actions like sending emails or processing payments, while your credentials remain protected.
+          </div>
+        `;
+        chatMessages.appendChild(notificationDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    });
 
   </script>
 </body>
