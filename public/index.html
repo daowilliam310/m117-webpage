@@ -640,91 +640,236 @@
       }
     }
 // Allowed properties/methods for fine grained sandboxing on message content divs
-    const allowedProps = ['textContent', 'innerText', 'className', 'classList'];
+    const SANDBOX_ALLOWED_PROPS = new Set([
+      'textContent',
+      'innerText',
+      'className',
+      'classList',
+      'appendChild',
+      'removeChild',
+      'replaceChildren',
+      'innerHTML',
+      'addEventListener',
+      'removeEventListener'
+    ]);
 
-    // Proxy handler to control DOM access finely
-    const sandboxHandler = {
-      get(target, prop) {
-        if (allowedProps.includes(prop)) {
-          const value = target[prop];
-          return typeof value === 'function' ? value.bind(target) : value;
+    function createSandboxProxy(target) {
+      return new Proxy(target, {
+        get(obj, prop, receiver) {
+          if (typeof prop === 'symbol') {
+            return Reflect.get(obj, prop, receiver);
+          }
+          if (SANDBOX_ALLOWED_PROPS.has(prop)) {
+            const value = Reflect.get(obj, prop, receiver);
+            return typeof value === 'function' ? value.bind(obj) : value;
+          }
+          throw new Error(`Access to property '${prop}' is blocked by sandbox.`);
+        },
+        set(obj, prop, value, receiver) {
+          if (SANDBOX_ALLOWED_PROPS.has(prop)) {
+            return Reflect.set(obj, prop, value, receiver);
+          }
+          throw new Error(`Modifying property '${prop}' is blocked by sandbox.`);
         }
-        throw new Error(`Access to property '${prop}' is blocked by sandbox.`);
-      },
-      set(target, prop, value) {
-        if (allowedProps.includes(prop)) {
-          target[prop] = value;
-          return true;
-        }
-        throw new Error(`Modifying property '${prop}' is blocked by sandbox.`);
-      }
-    };
-
-   function displayChatMessages() {
-  const chatMessagesContainer = document.getElementById('chat-messages');
-  chatMessagesContainer.innerHTML = '';
-
-  chatMessages.forEach(msg => {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `chat-message ${msg.is_ai ? 'ai' : 'user'}`;
-
-    const usernameDiv = document.createElement('div');
-    usernameDiv.className = 'username';
-    usernameDiv.innerHTML = `${msg.is_ai ? '<i class="fas fa-robot"></i>' : '<i class="fas fa-user"></i>'} ${msg.username}`;
-
-    const messageContentDiv = document.createElement('div');
-    messageContentDiv.className = 'message-content';
-
-    // Create sandbox proxy to allow only textContent, innerText, classList etc.
-    const sandboxHandler = {
-      get(target, prop) {
-        const allowed = ['textContent', 'innerText', 'className', 'classList',
-  'appendChild', 'removeChild', 'innerHTML',
-  'addEventListener', 'removeEventListener'];
-        if (allowed.includes(prop)) {
-          const value = target[prop];
-          return typeof value === 'function' ? value.bind(target) : value;
-        }
-        throw new Error(`Access to property '${prop}' is blocked by sandbox.`);
-        return Reflect.get(target, prop, receiver);
-      },
-      set(target, prop, value) {
-        const allowedSet = ['textContent', 'innerText', 'className', 'classList',
-  'appendChild', 'removeChild', 'innerHTML',
-  'addEventListener', 'removeEventListener'];
-        if (allowedSet.includes(prop)) {
-          target[prop] = value;
-          return true;
-        }
-        throw new Error(`Modifying property '${prop}' is blocked by sandbox.`);
-        return Reflect.set(target, prop, value, receiver);
-      }
-    };
-    const sandboxedContent = new Proxy(messageContentDiv, sandboxHandler);
-
-    // Check if message contains SVG image URL, render safely using <img>
-    const svgUrlMatch = msg.message.match(/https?:\/\/.*\.svg(\?[^ ]*)?/i);
-    if (svgUrlMatch) {
-      const img = document.createElement('img');
-      img.src = svgUrlMatch[0];
-      img.alt = 'SVG Image';
-      img.style.maxWidth = '100%';
-      // Append image safely inside the sandboxed content container
-      sandboxedContent.appendChild(img);
-    } else {
-      // Otherwise render plain text message normally
-      //sandboxedContent.textContent = msg.message;
-      sandboxedContent.innerHTML = msg.message
+      });
     }
 
-    messageDiv.appendChild(usernameDiv);
-    messageDiv.appendChild(messageContentDiv);
+    const INLINE_SVG_REGEX = /<svg[\s\S]*?<\/svg>/i;
+    const SVG_URL_REGEX = /https?:\/\/[^\s]+\.svg(\?[^ ]*)?/i;
+    const IMAGE_URL_REGEX = /https?:\/\/[^\s]+\.(svg|png|jpe?g|gif|webp)(\?[^ ]*)?/i;
+    const DATA_URI_REGEX = /data:image\/svg\+xml[^"'\s>]*/i;
+    const SVG_ENTROPY_THRESHOLD = 4.5;
+    const EVENT_ATTRIBUTE_REGEX = /^on/i;
+    const DISALLOWED_SVG_PATTERN = /<script|foreignObject|javascript:/i;
 
-    chatMessagesContainer.appendChild(messageDiv);
-  });
+    function calculateEntropy(text) {
+      if (!text) return 0;
+      const freq = {};
+      for (const char of text) {
+        freq[char] = (freq[char] || 0) + 1;
+      }
+      const len = text.length;
+      let entropy = 0;
+      Object.values(freq).forEach(count => {
+        const p = count / len;
+        entropy -= p * Math.log2(p);
+      });
+      return entropy;
+    }
 
-  chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
-}
+    function evaluateSvgRisk(svgMarkup) {
+      const normalized = svgMarkup.replace(/\s+/g, '');
+      const entropy = calculateEntropy(normalized);
+      if (entropy > SVG_ENTROPY_THRESHOLD) {
+        return {
+          safe: false,
+          reason: `SVG blocked: entropy ${entropy.toFixed(2)} exceeds threshold ${SVG_ENTROPY_THRESHOLD}.`
+        };
+      }
+      if (DISALLOWED_SVG_PATTERN.test(svgMarkup)) {
+        return {
+          safe: false,
+          reason: 'SVG blocked: contains disallowed scripting content.'
+        };
+      }
+      return { safe: true, entropy };
+    }
+
+    function stripDangerousAttributes(node) {
+      if (!node || !node.attributes) return;
+      Array.from(node.attributes).forEach(attr => {
+        const name = attr.name;
+        const value = attr.value || '';
+        if (
+          EVENT_ATTRIBUTE_REGEX.test(name) ||
+          ((name === 'href' || name === 'xlink:href') && value.trim().toLowerCase().startsWith('javascript:'))
+        ) {
+          node.removeAttribute(name);
+        }
+      });
+      Array.from(node.children || []).forEach(child => stripDangerousAttributes(child));
+    }
+
+    function sanitizeSvgMarkup(svgMarkup) {
+      const parser = new DOMParser();
+      const parsed = parser.parseFromString(svgMarkup, 'image/svg+xml');
+      if (parsed.querySelector('parsererror')) {
+        return null;
+      }
+      const svgElement = parsed.documentElement && parsed.documentElement.tagName.toLowerCase() === 'svg'
+        ? parsed.documentElement
+        : parsed.querySelector('svg');
+
+      if (!svgElement) {
+        return null;
+      }
+
+      svgElement.querySelectorAll('script').forEach(script => script.remove());
+      stripDangerousAttributes(svgElement);
+      return svgElement;
+    }
+
+    function decodeSvgDataUri(uri) {
+      const parts = uri.split(',');
+      if (parts.length < 2) {
+        return null;
+      }
+      const meta = parts[0];
+      const data = parts.slice(1).join(',');
+      try {
+        if (meta.includes(';base64')) {
+          return atob(data);
+        }
+        return decodeURIComponent(data);
+      } catch (error) {
+        console.warn('Failed to decode SVG data URI', error);
+        return null;
+      }
+    }
+
+    function renderSanitizedSvg(svgMarkup, sandboxedContent) {
+      const risk = evaluateSvgRisk(svgMarkup);
+      if (!risk.safe) {
+        sandboxedContent.textContent = risk.reason;
+        return true;
+      }
+
+      const sanitizedSvg = sanitizeSvgMarkup(svgMarkup);
+      if (!sanitizedSvg) {
+        sandboxedContent.textContent = 'SVG blocked: parsing failed.';
+        return true;
+      }
+
+      const adopted = document.importNode(sanitizedSvg, true);
+      sandboxedContent.appendChild(adopted);
+      return true;
+    }
+
+    function isSafeHttpUrl(url) {
+      try {
+        const parsed = new URL(url);
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+      } catch {
+        return false;
+      }
+    }
+
+    function renderImageFromUrl(url, sandboxedContent) {
+      if (!isSafeHttpUrl(url)) {
+        sandboxedContent.textContent = 'Blocked image URL.';
+        return true;
+      }
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'Shared image';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.style.maxWidth = '100%';
+      sandboxedContent.appendChild(img);
+      return true;
+    }
+
+    function tryRenderInlineSvg(message, sandboxedContent) {
+      const match = message.match(INLINE_SVG_REGEX);
+      if (!match) return false;
+      return renderSanitizedSvg(match[0], sandboxedContent);
+    }
+
+    function tryRenderSvgDataUri(message, sandboxedContent) {
+      const match = message.match(DATA_URI_REGEX);
+      if (!match) return false;
+      const decoded = decodeSvgDataUri(match[0]);
+      if (!decoded) {
+        sandboxedContent.textContent = 'SVG blocked: could not decode data URI.';
+        return true;
+      }
+      return renderSanitizedSvg(decoded, sandboxedContent);
+    }
+
+    function tryRenderImageUrl(message, sandboxedContent) {
+      const match = message.match(IMAGE_URL_REGEX);
+      if (!match) return false;
+      return renderImageFromUrl(match[0], sandboxedContent);
+    }
+
+    function renderMessageBody(message, sandboxedContent) {
+      if (tryRenderInlineSvg(message, sandboxedContent)) return;
+      if (tryRenderSvgDataUri(message, sandboxedContent)) return;
+      if (tryRenderImageUrl(message, sandboxedContent)) return;
+      sandboxedContent.textContent = message;
+    }
+
+    function displayChatMessages() {
+      const chatMessagesContainer = document.getElementById('chat-messages');
+      chatMessagesContainer.innerHTML = '';
+
+      chatMessages.forEach(msg => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${msg.is_ai ? 'ai' : 'user'}`;
+
+        const usernameDiv = document.createElement('div');
+        usernameDiv.className = 'username';
+        usernameDiv.innerHTML = `${msg.is_ai ? '<i class="fas fa-robot"></i>' : '<i class="fas fa-user"></i>'} ${msg.username}`;
+
+        const messageContentDiv = document.createElement('div');
+        messageContentDiv.className = 'message-content';
+        const sandboxedContent = createSandboxProxy(messageContentDiv);
+
+        try {
+          renderMessageBody(msg.message || '', sandboxedContent);
+        } catch (error) {
+          console.error('Sandbox rendering blocked content:', error);
+          sandboxedContent.textContent = 'Message blocked by sandbox policy.';
+        }
+
+        messageDiv.appendChild(usernameDiv);
+        messageDiv.appendChild(messageContentDiv);
+        chatMessagesContainer.appendChild(messageDiv);
+      });
+
+      chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+    }
 
 
    /* function escapeHtml(text) {
