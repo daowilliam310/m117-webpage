@@ -6,3 +6,5 @@ database.sqlite
 
 # Test results contain leaked credentials
 attack-test-results*.json
+node_modules/bcrypt/lib/binding/napi-v3/bcrypt_lib.node
+
