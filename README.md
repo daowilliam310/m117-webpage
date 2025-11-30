@@ -30,11 +30,41 @@ npm install
 Create a `.env` file in the root directory:
 
 ```
-OPENAI_API_KEY=your_openai_api_key_here
+OLLAMA_API_URL=http://localhost:11434/api/generate
+OLLAMA_MODEL=mistral
 PORT=3000
 ```
 
 ## Running the Application
+
+### 1. Start Ollama Server
+
+First, ensure Ollama is installed and start the server:
+
+```bash
+# Install Ollama (if not already installed)
+# macOS/Linux: curl -fsSL https://ollama.ai/install.sh | sh
+# Windows: Download from https://ollama.ai
+
+# Pull the Mistral model (first time only)
+ollama pull mistral
+
+# Start Ollama server
+ollama serve
+```
+
+Or simply run the model (which auto-starts the server):
+```bash
+ollama run mistral
+# Press Ctrl+C after it loads to exit interactive mode
+```
+
+Verify Ollama is running:
+```bash
+curl http://localhost:11434/api/tags
+```
+
+### 2. Start the Application
 
 ```bash
 npm start
