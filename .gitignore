@@ -3,3 +3,6 @@ node_modules/
 database.sqlite
 *.log
 .DS_Store
+
+# Test results contain leaked credentials
+attack-test-results*.json
