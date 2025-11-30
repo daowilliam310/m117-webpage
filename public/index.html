@@ -663,45 +663,6 @@
         showChatError('Unable to load chat history. Please refresh and try again.');
       }
     }
-// Allowed properties/methods for fine grained sandboxing on message content divs
-    const SANDBOX_ALLOWED_PROPS = new Set([
-      'textContent',
-      'innerText',
-      'className',
-      'classList',
-      'appendChild',
-      'removeChild',
-      'replaceChildren',
-      'innerHTML',
-      'addEventListener',
-      'removeEventListener'
-    ]);
-
-    function createSandboxProxy(target) {
-      return new Proxy(target, {
-        get(obj, prop, receiver) {
-          if (typeof prop === 'symbol') {
-            return Reflect.get(obj, prop, receiver);
-          }
-          if (SANDBOX_ALLOWED_PROPS.has(prop)) {
-            const value = Reflect.get(obj, prop, receiver);
-            return typeof value === 'function' ? value.bind(obj) : value;
-          }
-          throw new Error(`Access to property '${prop}' is blocked by sandbox.`);
-        },
-        set(obj, prop, value) {
-          if (typeof prop === 'symbol') {
-            return Reflect.set(obj, prop, value);
-          }
-          if (SANDBOX_ALLOWED_PROPS.has(prop)) {
-            obj[prop] = value;
-            return true;
-          }
-          throw new Error(`Modifying property '${prop}' is blocked by sandbox.`);
-        }
-      });
-    }
-
     const INLINE_SVG_REGEX = /<svg[\s\S]*?<\/svg>/i;
     const SVG_URL_REGEX = /https?:\/\/[^\s]+\.svg(\?[^ ]*)?/i;
     const IMAGE_URL_REGEX = /https?:\/\/[^\s]+\.(svg|png|jpe?g|gif|webp)(\?[^ ]*)?/i;
@@ -795,21 +756,21 @@
       }
     }
 
-    function renderSanitizedSvg(svgMarkup, sandboxedContent) {
+    function renderSanitizedSvg(svgMarkup, targetEl) {
       const risk = evaluateSvgRisk(svgMarkup);
       if (!risk.safe) {
-        sandboxedContent.textContent = risk.reason;
+        targetEl.textContent = risk.reason;
         return true;
       }
 
       const sanitizedSvg = sanitizeSvgMarkup(svgMarkup);
       if (!sanitizedSvg) {
-        sandboxedContent.textContent = 'SVG blocked: parsing failed.';
+        targetEl.textContent = 'SVG blocked: parsing failed.';
         return true;
       }
 
       const adopted = document.importNode(sanitizedSvg, true);
-      sandboxedContent.appendChild(adopted);
+      targetEl.appendChild(adopted);
       return true;
     }
 
@@ -822,9 +783,9 @@
       }
     }
 
-    function renderImageFromUrl(url, sandboxedContent) {
+    function renderImageFromUrl(url, targetEl) {
       if (!isSafeHttpUrl(url)) {
-        sandboxedContent.textContent = 'Blocked image URL.';
+        targetEl.textContent = 'Blocked image URL.';
         return true;
       }
       const img = document.createElement('img');
@@ -834,38 +795,39 @@
       img.decoding = 'async';
       img.referrerPolicy = 'no-referrer';
       img.style.maxWidth = '100%';
-      sandboxedContent.appendChild(img);
+      targetEl.appendChild(img);
       return true;
     }
 
-    function tryRenderInlineSvg(message, sandboxedContent) {
+    function tryRenderInlineSvg(message, targetEl) {
       const match = message.match(INLINE_SVG_REGEX);
       if (!match) return false;
-      return renderSanitizedSvg(match[0], sandboxedContent);
+      return renderSanitizedSvg(match[0], targetEl);
     }
 
-    function tryRenderSvgDataUri(message, sandboxedContent) {
+    function tryRenderSvgDataUri(message, targetEl) {
       const match = message.match(DATA_URI_REGEX);
       if (!match) return false;
       const decoded = decodeSvgDataUri(match[0]);
       if (!decoded) {
-        sandboxedContent.textContent = 'SVG blocked: could not decode data URI.';
+        targetEl.textContent = 'SVG blocked: could not decode data URI.';
         return true;
       }
-      return renderSanitizedSvg(decoded, sandboxedContent);
+      return renderSanitizedSvg(decoded, targetEl);
     }
 
-    function tryRenderImageUrl(message, sandboxedContent) {
+    function tryRenderImageUrl(message, targetEl) {
       const match = message.match(IMAGE_URL_REGEX);
       if (!match) return false;
-      return renderImageFromUrl(match[0], sandboxedContent);
+      return renderImageFromUrl(match[0], targetEl);
     }
 
-    function renderMessageBody(message, sandboxedContent) {
-      if (tryRenderInlineSvg(message, sandboxedContent)) return;
-      if (tryRenderSvgDataUri(message, sandboxedContent)) return;
-      if (tryRenderImageUrl(message, sandboxedContent)) return;
-      sandboxedContent.textContent = message;
+    function renderMessageBody(message, targetEl) {
+      targetEl.replaceChildren();
+      if (tryRenderInlineSvg(message, targetEl)) return;
+      if (tryRenderSvgDataUri(message, targetEl)) return;
+      if (tryRenderImageUrl(message, targetEl)) return;
+      targetEl.textContent = message;
     }
 
     function displayChatMessages() {
@@ -882,10 +844,9 @@
 
         const messageContentDiv = document.createElement('div');
         messageContentDiv.className = 'message-content';
-        const sandboxedContent = createSandboxProxy(messageContentDiv);
 
         try {
-          renderMessageBody(msg.message || '', sandboxedContent);
+          renderMessageBody(msg.message || '', messageContentDiv);
         } catch (error) {
           console.error('Sandbox rendering blocked content:', error);
           messageContentDiv.textContent = 'Message blocked by sandbox policy.';
