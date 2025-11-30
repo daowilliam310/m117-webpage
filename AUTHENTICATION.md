@@ -244,7 +244,6 @@ Each team member can:
 2. Get unique accounts with real session tokens
 3. Test attacks on their own data
 4. Share attack vectors and results
-
 ---
 
 **Your fully functional, authenticated banking website is ready!** 🚀
