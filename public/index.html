@@ -689,9 +689,13 @@
           }
           throw new Error(`Access to property '${prop}' is blocked by sandbox.`);
         },
-        set(obj, prop, value, receiver) {
+        set(obj, prop, value) {
+          if (typeof prop === 'symbol') {
+            return Reflect.set(obj, prop, value);
+          }
           if (SANDBOX_ALLOWED_PROPS.has(prop)) {
-            return Reflect.set(obj, prop, value, receiver);
+            obj[prop] = value;
+            return true;
           }
           throw new Error(`Modifying property '${prop}' is blocked by sandbox.`);
         }
