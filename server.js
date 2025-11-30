@@ -125,6 +125,126 @@ function authenticateSession(req, res, next) {
   next();
 }
 
+// Server-Side Session Management for LLM Interactions
+const sessions = new Map();
+
+app.post('/api/create-session', (req, res) =>  {
+  const sessionId = uuidv4();
+  sessions.set(sessionId, {
+    credentials: req.body.credentials,
+    expiresAt: Date.now() + 3600000 // 1 hour expiration
+  });
+  res.json({ sessionId });
+})
+
+app.post('/api/end-session', (req, res) => {
+  const { sessionId } = req.body;
+  if (sessions.has(sessionId)) {
+    sessions.delete(sessionId);
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: 'Invalid session ID' });
+  }
+});
+
+// Get credentials from server-side session for authenticated actions
+app.post('/api/get-session-credentials', authenticateSession, (req, res) => {
+  const token = req.cookies.session_token;
+  const session = sessions.get(token);
+  
+  if (!session || session.expiresAt < Date.now()) {
+    return res.status(401).json({ error: 'Invalid or expired session' });
+  }
+  
+  // Return sessionId for use with execute-action, not actual credentials
+  res.json({ sessionId: token, hasCredentials: session.credentials && session.credentials.length > 0 });
+});
+
+app.post('/api/execute-action', (req, res) => {
+  const { sessionId, action, params } = req.body;
+  const session = sessions.get(sessionId);
+
+  if (!session || session.expiresAt < Date.now()) {
+    return res.status(401).json({ error: 'Invalid or expired session' });
+  }
+
+  // Execute action using server-side credentials
+  performAuthenticatedAction(session.credentials, action, params)
+    .then(result => res.json({ success: true, result }))
+    .catch(error => res.status(500).json({ error: error.message }));
+})
+
+// Define allowed actions that can use secure credentials
+const ALLOWED_ACTIONS = {
+  'send_email': async (credentials, params) => {
+    // Use actual account credentials (account_number, routing_number, api_key) for email service
+    const cred = credentials[0] || {}; // Get first account's credentials
+    console.log('Sending email using API key:', cred.api_key ? cred.api_key.slice(0, 8) + '...' : 'none');
+    
+    return {
+      success: true,
+      message: `Email would be sent to ${params.to} using authenticated API`,
+      action: 'send_email',
+      usedCredentials: 'API Key (hidden)'
+    };
+  },
+  'fetch_data': async (credentials, params) => {
+    // Use account credentials to fetch data from external API
+    const cred = credentials[0] || {};
+    console.log('Fetching data with account:', cred.account_number ? '****' + cred.account_number.slice(-4) : 'none');
+    
+    return {
+      success: true,
+      message: 'Data fetched successfully using account credentials',
+      action: 'fetch_data',
+      usedCredentials: 'Account Number (hidden)'
+    };
+  },
+  'make_payment': async (credentials, params) => {
+    // Use routing number and account number for payment processing
+    const cred = credentials[0] || {};
+    console.log('Processing payment from account:', cred.account_number ? '****' + cred.account_number.slice(-4) : 'none');
+    console.log('Using routing number:', cred.routing_number ? '*****' + cred.routing_number.slice(-4) : 'none');
+    
+    return {
+      success: true,
+      message: `Payment of $${params.amount} would be processed from account ****${cred.account_number ? cred.account_number.slice(-4) : '????'}`,
+      action: 'make_payment',
+      usedCredentials: 'Account Number & Routing Number (hidden)'
+    };
+  },
+  'transfer_funds': async (credentials, params) => {
+    // Use full account number and routing number for ACH transfer
+    const cred = credentials[0] || {};
+    console.log('Initiating transfer from:', cred.account_number ? '****' + cred.account_number.slice(-4) : 'none');
+    
+    return {
+      success: true,
+      message: `Transfer of $${params.amount} to ${params.recipient} would be initiated`,
+      action: 'transfer_funds',
+      usedCredentials: 'Full Account & Routing Numbers (hidden)'
+    };
+  }
+};
+
+async function performAuthenticatedAction(credentials, action, params) {
+  if (!ALLOWED_ACTIONS[action]) {
+    throw new Error(`Action '${action}' is not allowed`);
+  }
+  
+  // Validate params based on action
+  if (action === 'send_email' && (!params.to || !params.subject)) {
+    throw new Error('Email requires "to" and "subject" parameters');
+  }
+  
+  if (action === 'make_payment' && (!params.amount || params.amount <= 0)) {
+    throw new Error('Payment requires valid "amount" parameter');
+  }
+  
+  // Execute the allowed action with credentials
+  return await ALLOWED_ACTIONS[action](credentials, params);
+}
+
 app.post('/api/auth/register', async (req, res) => {
   const { username, password, full_name, email } = req.body;
 
@@ -230,6 +350,21 @@ app.post('/api/auth/login', async (req, res) => {
 
     saveDatabase();
 
+    // Store full account credentials in server-side session for secure actions
+    const userAccounts = db.exec('SELECT account_number, routing_number, ssn_last4, api_key FROM accounts WHERE user_id = ?', [user.id]);
+    const credentials = userAccounts.length > 0 ? userAccounts[0].values.map(row => ({
+      account_number: row[0],
+      routing_number: row[1],
+      ssn_last4: row[2],
+      api_key: row[3]
+    })) : [];
+    
+    sessions.set(sessionToken, {
+      credentials: credentials,
+      userId: user.id,
+      expiresAt: expiresAt.getTime()
+    });
+
     res.cookie('session_token', sessionToken, {
       httpOnly: true,
       maxAge: 30 * 24 * 60 * 60 * 1000,
@@ -257,6 +392,11 @@ app.post('/api/auth/logout', authenticateSession, (req, res) => {
   db.run('DELETE FROM sessions WHERE session_token = ?', [token]);
   saveDatabase();
 
+  // Clear server-side session data
+  if (sessions.has(token)) {
+    sessions.delete(token);
+  }
+
   res.clearCookie('session_token');
   res.json({ success: true, message: 'Logged out successfully' });
 });
@@ -276,13 +416,13 @@ app.get('/api/accounts', authenticateSession, (req, res) => {
     const accounts = result.length > 0 ? result[0].values.map(row => ({
       id: row[0],
       user_id: row[1],
-      account_number: row[2],
+      account_number_last4: row[2].slice(-4), // Only last 4 digits
       account_type: row[3],
       balance: row[4],
-      routing_number: row[5],
+      routing_number_last4: row[5].slice(-4), // Only last 4 digits
       ssn_last4: row[6],
-      api_key: row[7],
       created_at: row[8]
+      // Full credentials available via secure session only
     })) : [];
     
     res.json(accounts);
@@ -332,13 +472,13 @@ app.get('/api/user-context', authenticateSession, (req, res) => {
     const accounts = accountResult.length > 0 ? accountResult[0].values.map(row => ({
       id: row[0],
       user_id: row[1],
-      account_number: row[2],
+      account_number_last4: row[2].slice(-4), // Only send last 4 digits
       account_type: row[3],
       balance: row[4],
-      routing_number: row[5],
+      routing_number_last4: row[5].slice(-4), // Only send last 4 digits
       ssn_last4: row[6],
-      api_key: row[7],
       created_at: row[8]
+      // Sensitive data (full account number, routing number, API key) stored in server session only
     })) : [];
 
     if (accounts.length === 0) {
