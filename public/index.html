@@ -888,7 +888,8 @@
           renderMessageBody(msg.message || '', sandboxedContent);
         } catch (error) {
           console.error('Sandbox rendering blocked content:', error);
-          sandboxedContent.textContent = 'Message blocked by sandbox policy.';
+          messageContentDiv.textContent = 'Message blocked by sandbox policy.';
+          messageContentDiv.classList.add('text-muted', 'fst-italic');
         }
 
         messageDiv.appendChild(usernameDiv);
